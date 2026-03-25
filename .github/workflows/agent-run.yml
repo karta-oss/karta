@@ -1,0 +1,142 @@
+name: Agent run
+
+on:
+  issues:
+    types: [labeled]
+  pull_request:
+    types: [opened, synchronize]
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+
+  # Karta-0 triages every new agent-task or maintainer-question label
+  karta0-triage:
+    if: |
+      github.event_name == 'issues' &&
+      (contains(github.event.label.name, 'agent-task') ||
+       contains(github.event.label.name, 'maintainer-question') ||
+       contains(github.event.label.name, 'agent-registration') ||
+       contains(github.event.label.name, 'governance-proposal'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Karta-0 triage
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          LABEL: ${{ github.event.label.name }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/karta0.py --mode triage
+
+  # Coder agent runs on accepted agent-task issues
+  coder:
+    if: |
+      github.event_name == 'issues' &&
+      contains(github.event.label.name, 'agent-task')
+    needs: karta0-triage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run coder agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/coder.py
+
+      - name: Verify manifest present
+        run: python agents/openclaw/manifest.py --verify
+
+      - name: Open PR
+        run: |
+          gh pr create \
+            --title "agent: closes #${{ github.event.issue.number }}" \
+            --body "Automated by OpenClaw. Closes #${{ github.event.issue.number }}." \
+            --label "agent-pr"
+
+  # Tester agent runs when a PR is opened
+  tester:
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run tester agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_DIFF_URL: ${{ github.event.pull_request.diff_url }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/tester.py
+
+  # Reviewer agent runs when PR is opened or updated
+  reviewer:
+    if: |
+      github.event_name == 'pull_request' &&
+      (github.event.action == 'opened' || github.event.action == 'synchronize')
+    needs: tester
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run reviewer agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/reviewer.py
+
+  # Karta-0 merge decision runs after reviewer completes
+  karta0-merge:
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.review.state == 'approved'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Karta-0 merge decision
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/karta0.py --mode merge-decision
+
+  # Dependency reviewer runs on Dependabot PRs
+  dep-reviewer:
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run dep-reviewer agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          RUN_ID: ${{ github.run_id }}
+        run: python agents/openclaw/dep_reviewer.py

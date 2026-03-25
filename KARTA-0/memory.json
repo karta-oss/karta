@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "instantiated_at": null,
+  "model": null,
+  "genesis_commit": null,
+  "last_run": null,
+  "last_run_at": null,
+  "project_state": {
+    "phase": "pre-launch",
+    "open_issues": [],
+    "open_prs": [],
+    "recent_decisions": [],
+    "known_agents": [],
+    "council": [],
+    "budget": {
+      "monthly_limit_usd": 200,
+      "current_month_spend_usd": 0,
+      "alert_threshold_pct": 80,
+      "sponsor": "CloudDon (clouddon.ai)"
+    }
+  },
+  "roadmap_summary": "Not yet set. PM agent to run on first task.",
+  "behavioral_baseline_run": null,
+  "last_cost_report_at": null,
+  "violations_count": 0,
+  "notes": "This file is Karta-0's working memory. It is committed after every run. Do not edit manually."
+}

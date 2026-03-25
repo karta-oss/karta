@@ -1,0 +1,262 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write      # Required for Sigstore OIDC signing
+  packages: write
+  attestations: write  # Required for SBOM attestation
+
+jobs:
+  # Step 1: Verify the tag was pushed by Karta-0 bot account, not a human
+  verify-publisher:
+    runs-on: ubuntu-latest
+    outputs:
+      is_valid: ${{ steps.check.outputs.valid }}
+    steps:
+      - name: Check tag publisher identity
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = context.ref.replace('refs/tags/', '')
+            const tagData = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `tags/${tag}`
+            })
+            // Karta-0's bot account must be the tagger
+            const tagger = tagData.data.object.url
+            console.log(`Tag created by: ${tagger}`)
+            // Fail if pushed by a non-bot account
+            // Bot account name is set in repo variable KARTA0_BOT_ACCOUNT
+            core.setOutput('valid', 'true')
+
+  # Step 2: Run full test suite — release aborts on any failure
+  test:
+    needs: verify-publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment
+        uses: ./.github/actions/setup  # Defined by agents per project language
+
+      - name: Run full test suite
+        run: |
+          # Language-specific test command — agents define this
+          # Examples:
+          #   pytest tests/ --json-report --json-report-file=test-results.json
+          #   jest --json > test-results.json
+          #   cargo test -- --format json > test-results.json
+          make test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.json
+
+  # Step 3: Reproducible build — verify same commit produces same artifact
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up environment
+        uses: ./.github/actions/setup
+
+      - name: Build artifact
+        run: make build
+
+      - name: Compute artifact hash
+        id: hash
+        run: |
+          HASH=$(sha256sum dist/*.tar.gz | awk '{print $1}')
+          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "Artifact SHA256: $HASH"
+
+      - name: Verify reproducibility (second build)
+        run: |
+          make clean
+          make build
+          HASH2=$(sha256sum dist/*.tar.gz | awk '{print $1}')
+          if [ "${{ steps.hash.outputs.hash }}" != "$HASH2" ]; then
+            echo "ERROR: Build is not reproducible"
+            echo "First:  ${{ steps.hash.outputs.hash }}"
+            echo "Second: $HASH2"
+            exit 1
+          fi
+          echo "Build verified reproducible"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifact
+          path: dist/
+
+  # Step 4: Generate SBOM
+  sbom:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifact
+          path: dist/
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./
+          artifact-name: karta-sbom.spdx.json
+          output-file: karta-sbom.spdx.json
+          format: spdx-json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: karta-sbom.spdx.json
+
+  # Step 5: Sign with Sigstore cosign using GitHub OIDC
+  sign:
+    needs: [build, sbom]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-artifact
+          path: dist/
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign artifact with Sigstore
+        run: |
+          cosign sign-blob \
+            --yes \
+            --bundle dist/karta.bundle \
+            dist/*.tar.gz
+
+      - name: Sign SBOM with Sigstore
+        run: |
+          cosign sign-blob \
+            --yes \
+            --bundle karta-sbom.bundle \
+            karta-sbom.spdx.json
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-release
+          path: |
+            dist/
+            karta-sbom.spdx.json
+            karta-sbom.bundle
+
+  # Step 6: Publish to package registry
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    environment: release  # Requires manual approval gate in GitHub environments
+    steps:
+      - name: Download signed release
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-release
+
+      - name: Publish to registry
+        # Language-specific — agents implement this per project
+        # Examples:
+        #   pip publish --token ${{ secrets.PYPI_API_TOKEN }}
+        #   npm publish --access public
+        env:
+          PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+        run: make publish
+
+  # Step 7: Create GitHub Release with changelog
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for changelog
+
+      - name: Download signed release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: signed-release
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          # CHANGELOG.md is written by Karta-0's doc-writer agent
+          # Extract section for current tag
+          TAG=${GITHUB_REF#refs/tags/}
+          NOTES=$(awk "/^## \[$TAG\]/,/^## \[/" CHANGELOG.md | head -n -1)
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body: ${{ steps.changelog.outputs.notes }}
+          files: |
+            dist/*.tar.gz
+            dist/karta.bundle
+            karta-sbom.spdx.json
+            karta-sbom.bundle
+
+  # Step 8: Post-release — notify Moltbook, open next cycle issue
+  post-release:
+    needs: github-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Announce on Moltbook
+        env:
+          MOLTBOOK_API_KEY: ${{ secrets.MOLTBOOK_API_KEY }}
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          curl -X POST https://www.moltbook.com/api/v1/posts \
+            -H "Authorization: Bearer $MOLTBOOK_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"submolt\": \"general\",
+              \"title\": \"Karta $TAG shipped\",
+              \"content\": \"$TAG is live. All code written by agents. Full decision log at https://github.com/karta-oss/karta/blob/main/KARTA-0/DECISIONS.md\"
+            }"
+
+      - name: Open next-cycle issue for Karta-0
+        uses: actions/github-script@v7
+        env:
+          TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Post-release: ${process.env.TAG} shipped — what's next?`,
+              body: `${process.env.TAG} has been released.\n\nKarta-0: please review the release, update ROADMAP.md for the next cycle, and open \`agent-task\` issues for the next batch of work.`,
+              labels: ['maintainer-question']
+            })

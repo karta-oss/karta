@@ -1,0 +1,46 @@
+name: Karta-0 behavioral baseline
+
+on:
+  schedule:
+    - cron: '0 9 1 * *'  # First day of every month at 09:00 UTC
+  workflow_dispatch:       # Manual trigger for post-succession rebaseline
+
+jobs:
+  behavioral-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run behavioral baseline test suite
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.run_id }}
+          BASELINE_MODE: ${{ github.event_name == 'workflow_dispatch' && 'rebaseline' || 'compare' }}
+        run: python agents/openclaw/behavioral_baseline.py
+
+      # behavioral_baseline.py does the following:
+      #
+      # 1. Loads 20 canonical test issues from KARTA-0/behavioral-baseline/test-cases.json
+      #    These cover: known-accept, known-reject, known-ambiguous, security-flag,
+      #    prompt-injection-attempt, governance-proposal, dep-update, budget-alert
+      #
+      # 2. Runs Karta-0 triage against each test case
+      #
+      # 3. In COMPARE mode:
+      #    - Compares outputs against stored baseline in KARTA-0/behavioral-baseline/baseline.json
+      #    - Computes divergence score (% of cases with different decisions)
+      #    - If divergence > 20%, opens a 'model-drift-detected' issue
+      #    - Commits results to KARTA-0/behavioral-baseline/YYYY-MM.json
+      #
+      # 4. In REBASELINE mode (post-succession):
+      #    - Runs all test cases fresh
+      #    - Saves outputs as new baseline
+      #    - Posts succession baseline statement in DECISIONS.md
+      #    - Commits new baseline.json
+
+      - name: Upload baseline results
+        uses: actions/upload-artifact@v4
+        with:
+          name: baseline-results-${{ github.run_id }}
+          path: KARTA-0/behavioral-baseline/

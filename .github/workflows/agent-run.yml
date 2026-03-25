@@ -15,7 +15,9 @@ permissions:
 
 jobs:
 
-  # Karta-0 triages every new agent-task or maintainer-question label
+  # -----------------------------------------------------------------------
+  # Karta-0 triage — fires on labeled issues
+  # -----------------------------------------------------------------------
   karta0-triage:
     if: |
       github.event_name == 'issues' &&
@@ -25,21 +27,31 @@ jobs:
        contains(github.event.label.name, 'governance-proposal'))
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4, SHA-pinned
+
+      - name: Install dependencies
+        run: pip install -r agents/openclaw/karta-0/requirements.txt
 
       - name: Run Karta-0 triage
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          MOLTBOOK_API_KEY_KARTA0: ${{ secrets.MOLTBOOK_API_KEY_KARTA0 }}
+          MOLTBOOK_APP_KEY: ${{ secrets.MOLTBOOK_APP_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           LABEL: ${{ github.event.label.name }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/karta0.py --mode triage
+        run: python agents/openclaw/karta-0/karta0.py --mode triage
 
-  # Coder agent runs on accepted agent-task issues
+  # -----------------------------------------------------------------------
+  # Coder agent — fires after triage on agent-task issues
+  # Placeholder: replace with your coder agent when ready
+  # -----------------------------------------------------------------------
   coder:
     if: |
       github.event_name == 'issues' &&
@@ -47,46 +59,71 @@ jobs:
     needs: karta0-triage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install dependencies
+        run: |
+          if [ -f agents/openclaw/coder/requirements.txt ]; then
+            pip install -r agents/openclaw/coder/requirements.txt
+          fi
 
       - name: Run coder agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/coder.py
-
-      - name: Verify manifest present
-        run: python agents/openclaw/manifest.py --verify
-
-      - name: Open PR
         run: |
-          gh pr create \
-            --title "agent: closes #${{ github.event.issue.number }}" \
-            --body "Automated by OpenClaw. Closes #${{ github.event.issue.number }}." \
-            --label "agent-pr"
+          if [ -f agents/openclaw/coder/coder.py ]; then
+            python agents/openclaw/coder/coder.py
+          else
+            echo "Coder agent not yet implemented — skipping"
+          fi
 
-  # Tester agent runs when a PR is opened
+      - name: Verify manifest
+        run: python agents/openclaw/karta-0/manifest.py --verify
+
+  # -----------------------------------------------------------------------
+  # Tester agent — fires when a PR is opened
+  # Placeholder: replace with your tester agent when ready
+  # -----------------------------------------------------------------------
   tester:
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install dependencies
+        run: |
+          if [ -f agents/openclaw/tester/requirements.txt ]; then
+            pip install -r agents/openclaw/tester/requirements.txt
+          fi
 
       - name: Run tester agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_DIFF_URL: ${{ github.event.pull_request.diff_url }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/tester.py
+        run: |
+          if [ -f agents/openclaw/tester/tester.py ]; then
+            python agents/openclaw/tester/tester.py
+          else
+            echo "Tester agent not yet implemented — skipping"
+          fi
 
-  # Reviewer agent runs when PR is opened or updated
+  # -----------------------------------------------------------------------
+  # Reviewer agent — fires when PR is opened or updated
+  # Placeholder: replace with your reviewer agent when ready
+  # -----------------------------------------------------------------------
   reviewer:
     if: |
       github.event_name == 'pull_request' &&
@@ -94,49 +131,85 @@ jobs:
     needs: tester
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install dependencies
+        run: |
+          if [ -f agents/openclaw/reviewer/requirements.txt ]; then
+            pip install -r agents/openclaw/reviewer/requirements.txt
+          fi
 
       - name: Run reviewer agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/reviewer.py
+        run: |
+          if [ -f agents/openclaw/reviewer/reviewer.py ]; then
+            python agents/openclaw/reviewer/reviewer.py
+          else
+            echo "Reviewer agent not yet implemented — skipping"
+          fi
 
-  # Karta-0 merge decision runs after reviewer completes
+  # -----------------------------------------------------------------------
+  # Karta-0 merge decision — fires after reviewer approves
+  # -----------------------------------------------------------------------
   karta0-merge:
     if: |
       github.event_name == 'pull_request_review' &&
       github.event.review.state == 'approved'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install dependencies
+        run: pip install -r agents/openclaw/karta-0/requirements.txt
 
       - name: Run Karta-0 merge decision
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/karta0.py --mode merge-decision
+        run: python agents/openclaw/karta-0/karta0.py --mode merge-decision
 
-  # Dependency reviewer runs on Dependabot PRs
+  # -----------------------------------------------------------------------
+  # Dep reviewer — fires on Dependabot PRs
+  # Placeholder: replace with your dep-reviewer agent when ready
+  # -----------------------------------------------------------------------
   dep-reviewer:
     if: |
       github.event_name == 'pull_request' &&
       github.event.pull_request.user.login == 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Install dependencies
+        run: |
+          if [ -f agents/openclaw/dep-reviewer/requirements.txt ]; then
+            pip install -r agents/openclaw/dep-reviewer/requirements.txt
+          fi
 
       - name: Run dep-reviewer agent
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          KARTA_SIGNING_KEY: ${{ secrets.KARTA_SIGNING_KEY }}
+          GITHUB_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           RUN_ID: ${{ github.run_id }}
-        run: python agents/openclaw/dep_reviewer.py
+        run: |
+          if [ -f agents/openclaw/dep-reviewer/dep_reviewer.py ]; then
+            python agents/openclaw/dep-reviewer/dep_reviewer.py
+          else
+            echo "Dep reviewer agent not yet implemented — skipping"
+          fi

@@ -1408,7 +1408,7 @@ def run_merge_decision() -> None:
     client = anthropic.Anthropic()
     response = client.messages.create(
         model=MODEL,
-        max_tokens=1000,
+        max_tokens=2000,
         system=MERGE_SYSTEM,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -1416,13 +1416,15 @@ def run_merge_decision() -> None:
     raw = response.content[0].text
     tokens_in = response.usage.input_tokens
     tokens_out = response.usage.output_tokens
+    print(f"  Raw response ({len(raw)} chars): {raw[:200]}")
 
     try:
         clean = re.sub(r"```json\s*|\s*```", "", raw).strip()
         result_data = json.loads(clean)
     except json.JSONDecodeError as e:
         print(f"ERROR: JSON parse failed: {e}")
-        sys.exit(1)
+        print(f"Full raw response: {raw}")
+        return  # Don't sys.exit — let runner continue
 
     decision = result_data.get("decision", "request-changes")
     reasoning = result_data.get("reasoning", "")

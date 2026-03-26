@@ -1455,16 +1455,18 @@ def run_merge_decision() -> None:
     )
 
     try:
-        subprocess.run(
-            [
-                "gh", "pr", "comment", pr_number,
-                "--body", comment,
-                "--repo", GITHUB_REPO,
-            ],
-            env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
-        )
-
         if decision == "merge":
+            # Submit formal GitHub review approval — satisfies branch protection
+            subprocess.run(
+                [
+                    "gh", "pr", "review", pr_number,
+                    "--approve",
+                    "--body", comment,
+                    "--repo", GITHUB_REPO,
+                ],
+                env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
+            )
+            # Then merge
             subprocess.run(
                 [
                     "gh", "pr", "merge", pr_number,
@@ -1473,6 +1475,16 @@ def run_merge_decision() -> None:
                 env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
             )
             print(f"  PR #{pr_number} merged")
+        else:
+            # For request-changes and close, post a comment
+            subprocess.run(
+                [
+                    "gh", "pr", "comment", pr_number,
+                    "--body", comment,
+                    "--repo", GITHUB_REPO,
+                ],
+                env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
+            )
     except FileNotFoundError:
         print("  (gh CLI not found — skipping PR actions)")
 

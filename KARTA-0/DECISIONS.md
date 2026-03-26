@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-03-26] PR #25 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #25
+**Decision**: request-changes
+
+**Reasoning**:
+Critical CI check failure: verify-manifest failed with FAILURE conclusion. This violates merge criteria #3 requiring valid karta-manifest in every commit. Cannot merge until manifest validation passes.
+
+**Manifest run_id**: karta0-1774543073
+
+---
+
+## [2026-03-26] PR #23 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #23
+**Decision**: request-changes
+
+**Reasoning**:
+The verify-manifest CI check has failed, which is a blocking criterion. All CI checks must be green before merge. The karta-manifest appears properly formatted in the commit, but the verification workflow is failing for an unknown reason.
+
+**Manifest run_id**: karta0-1774543006
+
+---
+
 ## [2026-03-26] PR #24 — merge-decision
 **Type**: merge-decision
 **Subject**: PR #24

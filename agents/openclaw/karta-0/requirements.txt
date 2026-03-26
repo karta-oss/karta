@@ -1,0 +1,17 @@
+# agents/openclaw/karta-0/requirements.txt
+#
+# Karta-0 dependencies — covers all three modes:
+#   pm mode:             anthropic + pydantic
+#   triage mode:         anthropic
+#   merge-decision mode: anthropic
+#
+# SECURITY: Pin to exact versions with hashes before production use.
+# Run: pip-compile --generate-hashes requirements.in
+# The dep-reviewer agent will add SHA256 hashes via Dependabot PR.
+#
+# Context: LiteLLM supply chain attack (March 24, 2026, TeamPCP/Trivy)
+# demonstrated that unpinned AI tooling dependencies are high-value
+# targets. Always install with: pip install --require-hashes -r requirements.txt
+
+anthropic>=0.49.0
+pydantic>=2.0.0

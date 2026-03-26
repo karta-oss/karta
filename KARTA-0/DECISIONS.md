@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-03-26] PR #24 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #24
+**Decision**: request-changes
+
+**Reasoning**:
+The verify-manifest check failed, which is a blocking CI failure. All CI checks must pass before merge according to the merge criteria. The manifest validation is critical for maintaining code provenance.
+
+**Manifest run_id**: karta0-1774558126
+
+---
+
 ## [2026-03-26] PR #25 — merge-decision
 **Type**: merge-decision
 **Subject**: PR #25

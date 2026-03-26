@@ -1419,7 +1419,12 @@ def run_merge_decision() -> None:
     print(f"  Raw response ({len(raw)} chars): {raw[:200]}")
 
     try:
-        clean = re.sub(r"```json\s*|\s*```", "", raw).strip()
+        # Extract JSON block — handle prose before/after ```json fence
+        json_match = re.search(r"```json\s*({.*?})\s*```", raw, re.DOTALL)
+        if json_match:
+            clean = json_match.group(1)
+        else:
+            clean = re.sub(r"```json\s*|\s*```", "", raw).strip()
         result_data = json.loads(clean)
     except json.JSONDecodeError as e:
         print(f"ERROR: JSON parse failed: {e}")

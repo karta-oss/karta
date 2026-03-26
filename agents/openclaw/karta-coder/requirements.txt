@@ -1,2 +1,0 @@
-# agents/openclaw/karta-coder/requirements.txt
-anthropic>=0.49.0

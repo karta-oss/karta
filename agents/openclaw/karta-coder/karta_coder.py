@@ -133,9 +133,6 @@ def detect_project_name(workdir: str, spec: str) -> str:
     Detect the Python package name for this project.
     Tries: existing src/ subdirectory, pyproject.toml, spec content, fallback.
     """
-    # Check env override first
-    if os.environ.get("KARTA_PACKAGE_NAME"):
-        return os.environ["KARTA_PACKAGE_NAME"]
     root = Path(workdir)
 
     # Check existing src/ subdirectory
@@ -212,9 +209,10 @@ RULES — non-negotiable:
 - Write pure functions — no side effects, no global state where avoidable.
 - Tests go in tests/test_<module>.py and must run with: pytest tests/
 - No network calls in tests. No database. No external services.
-- Max 200 lines per file. Split if needed.
+- Max 150 lines per implementation file. Max 100 lines per test file. Split if needed.
 - No exec(), eval(), subprocess with shell=True, hardcoded secrets.
 - Only use Python stdlib. No third-party imports unless in SPEC approved_dependencies.
+- Keep responses concise — do not over-engineer. Minimal working implementation only.
 
 PROJECT LAYOUT:
   src/<package_name>/<module>.py   — implementation
@@ -296,7 +294,7 @@ def generate_implementation(
         try:
             response = client.messages.create(
                 model=MODEL,
-                max_tokens=4000,
+                max_tokens=8000,
                 system=CODER_SYSTEM,
                 messages=[{"role": "user", "content": prompt}],
             )

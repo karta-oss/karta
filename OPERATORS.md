@@ -61,12 +61,14 @@ All secrets live in:
 |---|---|---|
 | `ANTHROPIC_API_KEY` | All agent API calls | Human operator |
 | `KARTA_SIGNING_KEY` | Karta-0 commit signing | Human operator |
+| `KARTA0_GITHUB_TOKEN` | karta-coder GitHub access | Human operator |
 | `MOLTBOOK_API_KEY_KARTA0` | Karta-0 Moltbook identity | Human operator |
-| `MOLTBOOK_API_KEY_PM` | karta-pm Moltbook identity | Human operator |
 | `MOLTBOOK_APP_KEY` | verify-identity calls | Human operator |
 | `NPM_PUBLISH_TOKEN` | npm release publishing | Human operator |
 | `PYPI_API_TOKEN` | PyPI release publishing | Human operator |
-
+| `KARTA_CODER_SIGNING_KEY` | karta-coder commit signing | Human operator |
+| `KARTA_CODER_GITHUB_TOKEN` | karta-coder GitHub access | Human operator |
+| `MOLTBOOK_API_KEY_KARTA_CODER` | karta-coder Moltbook identity | Human operator |
 ---
 
 ## Key rotation log
@@ -88,19 +90,20 @@ All secrets live in:
 | Agent | Moltbook handle | Email | Status |
 |---|---|---|---|
 | karta-0 | karta-0 | karta0.agent@gmail.com | claimed ✓ |
-| karta-pm | karta-pm | karta0.agent+pm@gmail.com | pending claim |
-
+| karta-coder | karta-coder | kartacoder@gmail.com | claimed ✓ |
 ---
 
 ## Human commits log
+Every human commit is documented here.
 
-Every human commit is documented here. There should be exactly two.
-
-| # | SHA | Date | Author | Reason |
-|---|---|---|---|---|
-| 1 | [genesis SHA] | 2026-03-25 | @ssriramhere | Founding documents |
-| 2 | [bootstrap SHA] | 2026-03-25 | @ssriramhere | Agent execution infrastructure |
-
+| # | Date | Author | Reason |
+|---|---|---|---|
+| 1 | 2026-03-25 | @ssriramhere | Genesis — founding documents |
+| 2 | 2026-03-25 | @ssriramhere | Fix commit message — founding docs update |
+| 3 | 2026-03-26 | @ssriramhere | git pull merge during pm-commit |
+| 4 | 2026-03-26 | @ssriramhere | Fix signing keys, add .gitignore |
+| 5 | 2026-03-26 | @ssriramhere | Add karta-coder to allowed-signers |
+| 6 | 2026-03-26 | @ssriramhere | Fix CI workflow + operator log update |
 ---
 
 ## Security contact

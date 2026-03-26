@@ -1484,11 +1484,10 @@ def run_merge_decision() -> None:
         RUN_ID,
     )
     save_memory(memory, RUN_ID)
-    git_commit_and_push(
-        f"karta-0(merge): PR #{pr_number} → {decision}\n\n"
-        f"```karta-manifest\n{manifest}\n```",
-        os.environ.get("KARTA_SIGNING_KEY"),
-    )
+    # Note: karta-0 does NOT push merge logs directly to main.
+    # Merge logs are committed as part of the PR merge itself.
+    # This avoids branch protection conflicts.
+    print(f"  Merge decision logged locally: {log_path}")
 
     print(f"  Merge decision complete — PR #{pr_number} → {decision}")
 

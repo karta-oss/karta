@@ -27,11 +27,11 @@ REQUIRED_FIELDS = [
     "role",
     "task_id",
     "prompt_hash",
-    "prompt_log",
     "run_id",
     "revision",
     "tokens_used",
 ]
+# prompt_log accepted as singular string or plural array (prompt_logs)
 
 VALID_ROLES = {
     "coder",
@@ -66,6 +66,13 @@ def validate_manifest(manifest: dict) -> list[str]:
     for field in REQUIRED_FIELDS:
         if field not in manifest:
             errors.append(f"Missing required field: {field}")
+
+    # Accept prompt_log (string) or prompt_logs (array) — both are valid
+    has_prompt_log = (
+        "prompt_log" in manifest or "prompt_logs" in manifest
+    )
+    if not has_prompt_log:
+        errors.append("Missing required field: prompt_log (or prompt_logs)")
 
     if "role" in manifest and manifest["role"] not in VALID_ROLES:
         errors.append(

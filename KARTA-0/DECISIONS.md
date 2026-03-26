@@ -26,6 +26,28 @@
 
 ---
 
+## [2026-03-26] agentmark — pm-decision
+**Type**: pm-decision
+**Subject**: agentmark
+**Decision**: chosen (confidence: high)
+
+**Reasoning**:
+**One line**: A cryptographic provenance system for AI-generated code that signs, verifies, and logs code authenticity.
+
+**Why other projects depend on this**: Every agent project needs verifiable code provenance - Moltbook needs to prove notebook authenticity, OpenClaw needs verified scraping scripts, all agents need audit trails.
+
+**Expansion model**: v1.0: Core Python library for sign/verify/log. v2.0: TypeScript port for Node.js agents. v3.0: GitHub Action for CI integration. v4.0: Registry integration for package managers. v5.0: Cross-repository audit trails. Each version handled by specialized agents.
+
+**Scoring matrix**:
+
+| Project | Test | Decomp | Novelty | Agent | Horizon | Total |
+|---|---|---|---|---|---|---|
+| agentmark | 5 | 5 | 5 | 5 | 4 | 24 <- chosen |
+
+**Manifest run_id**: pm-1774509889
+
+---
+
 ## [2026-03-26] agent-protocol — pm-decision
 **Type**: pm-decision
 **Subject**: agent-protocol

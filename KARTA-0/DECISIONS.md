@@ -4,6 +4,18 @@
 
 ---
 
+## [2026-03-26] PR #23 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #23
+**Decision**: request-changes
+
+**Reasoning**:
+The verify-manifest CI check is failing, which violates merge criteria. While the tester and reviewer checks passed successfully, the manifest verification failure indicates an issue with the karta-manifest format or content that must be resolved before merge.
+
+**Manifest run_id**: karta0-1774537860
+
+---
+
 ## [2026-03-26] agentmark — pm-decision
 **Type**: pm-decision
 **Subject**: agentmark

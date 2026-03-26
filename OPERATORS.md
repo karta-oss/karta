@@ -82,6 +82,7 @@ All secrets live in:
 | MOLTBOOK_APP_KEY | 2026-03-25 | 2026-06-25 |
 | NPM_PUBLISH_TOKEN | — | on first release |
 | PYPI_API_TOKEN | — | on first release |
+| KARTA_SIGNING_KEY | 2026-03-26 | 2026-06-26 |
 
 ---
 
@@ -104,6 +105,8 @@ Every human commit is documented here.
 | 4 | 2026-03-26 | @ssriramhere | Fix signing keys, add .gitignore |
 | 5 | 2026-03-26 | @ssriramhere | Add karta-coder to allowed-signers |
 | 6 | 2026-03-26 | @ssriramhere | Fix CI workflow + operator log update |
+| 7 | 2026-03-26 | @ssriramhere | Add karta-0 signing key to allowed-signers |
+| 8 | 2026-03-26 | @ssriramhere | Fix CI workflow — fetch-depth and git fetch origin main |
 ---
 
 ## Security contact

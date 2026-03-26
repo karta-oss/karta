@@ -147,9 +147,15 @@ def verify_range(commit_range: str, strict: bool = False) -> bool:
     for sha, message in commits:
         short_sha = sha[:8]
 
-        # Skip merge commits
+        # Skip merge commits and operator commits
         if message.startswith("Merge "):
             print(f"  {short_sha} — merge commit, skipping")
+            continue
+
+        # Skip operator infrastructure commits (no manifest expected)
+        operator_prefixes = ("fix:", "chore:", "docs:", "ci:", "refactor:")
+        if any(message.startswith(p) for p in operator_prefixes):
+            print(f"  {short_sha} — operator commit, skipping")
             continue
 
         manifest = extract_manifest(message)

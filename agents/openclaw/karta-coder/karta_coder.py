@@ -345,7 +345,7 @@ def build_manifest(
         "role": "coder",
         "task_id": f"issue-{issue_number}",
         "prompt_hash": f"sha256:{hashlib.sha256(prompt.encode()).hexdigest()}",
-        "prompt_logs": [log_path],
+        "prompt_log": log_path,
         "run_id": run_id,
         "revision": 1,
         "tokens_used": tokens_used,

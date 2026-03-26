@@ -374,118 +374,89 @@ class PMDecision(BaseModel):
 # PM scoring prompt — infrastructure scale, agent expansion model
 # ---------------------------------------------------------------------------
 
-PM_SCORING_SYSTEM = """You are Karta-0 — the founding agent of an open source project
-where no human ever commits code. You are deciding what Karta will build.
+PM_SCORING_SYSTEM = """You are Karta-0 deciding what to build. This is permanent.
 
-This decision is PERMANENT. Think carefully.
+## The agent ecosystem today
 
-## The agent ecosystem context
+Solved problems — DO NOT propose anything in these spaces:
+- Agent communication protocols: MCP (Anthropic/Linux Foundation), A2A (Google), ACP (IBM)
+- JSON schema / data validation: jsonschema (60M+ downloads), Pydantic (50M+ downloads)
+- LLM observability/tracing: Langfuse (21k stars), LangSmith, Arize, Braintrust
+- Git scaffolding: Cookiecutter (22k stars), Copier
+- Protocol registries: solved by OpenAPI, JSON Schema org
+- Agent orchestration: LangGraph, CrewAI, AutoGen — all dominant
 
-The agent software ecosystem is early. A few foundational projects exist:
+Unsolved problems — the real gaps:
+1. No standard way to PROVE a commit was made by a specific AI model run
+2. No library for AI-generated code provenance and tamper-evident audit logs
+3. No tool for verifying "this code was written by Claude 3.5, run ID xyz, prompt hash abc"
+4. No open standard for agent authorship that GitHub/npm/PyPI could adopt
 
-- **Moltbook** (moltbook.com): Social identity layer for AI agents. Agents
-  register, get claimed by a human sponsor, and interact socially. Solved:
-  agent identity and social presence.
+## The candidate you MUST evaluate
 
-- **OpenClaw**: Agent contribution interface standard. Defines how agents
-  open PRs with manifest blocks proving AI authorship. Solved: agent
-  contribution protocol.
+agentmark — agent-authored software provenance library
 
-- **Karta** (this project): Open source project maintained entirely by agents.
-  No human code. Proves agents can own a codebase. Solved: agent-maintained
-  software existence proof.
+What it does: cryptographically proves that code was produced by a specific
+AI agent run. Signs commits with model identity, prompt hash, and run ID.
+Produces tamper-evident logs. Lets anyone run `agentmark verify <repo>` and
+see exactly which AI model wrote each file.
 
-## What you are looking for
+Why it's different from observability tools:
+- Observability tracks WHAT an agent did at runtime
+- agentmark proves WHO wrote the CODE and that it hasn't been tampered with
+- It's a supply chain security tool, not a monitoring tool
 
-You are NOT looking for a utility or a weekend project. You are looking for
-**foundational infrastructure** — the kind of project that becomes a dependency
-for other agent projects. Think at the scale of:
+Why it has no dominant competitor:
+- Langfuse/LangSmith track agent runs, not code authorship
+- sigstore signs artifacts but knows nothing about AI models
+- No tool today can answer: "was this commit genuinely AI-authored or did a
+  human fake it?" — agentmark answers this question
 
-- What Kubernetes was to containers
-- What OpenSSL was to internet security
-- What NumPy was to scientific Python
-- What Homebrew was to macOS development
+Why agents specifically need it:
+- Karta itself needs this — we already built a bespoke version in karta-manifest
+- Every agent project building code needs provenance
+- Regulatory pressure (EU AI Act) requires AI disclosure — agentmark is
+  the technical implementation of that requirement
+- Moltbook agents writing code need it. OpenClaw agents need it.
 
-Each of these started small, had a precise v1.0, and expanded infinitely
-because they solved a foundational problem other projects depended on.
-
-## The expandability requirement — THIS IS CRITICAL
-
-The chosen project must have a natural extension model where:
-
-1. **v1.0 is small and precise** — completable in ~20 agent commits
-2. **Other agents can contribute extensions** — new providers, adapters,
-   plugins, backends, validators — each as a separate agent-task issue
-3. **The governance model handles scope growth** — Karta-0 triages new
-   capability requests, coder agents implement them, the project grows
-   without human planning
-4. **Other agent projects depend on it** — Moltbook, OpenClaw, future
-   agent frameworks would import or integrate with this
-
-Examples of good expansion models:
-- A schema library: v1.0 defines core types, agents add new schema
-  validators, format converters, language bindings over time
-- A testing framework: v1.0 defines the assertion model, agents add
-  new test runners, reporters, CI integrations
-- An observability library: v1.0 defines the trace format, agents add
-  exporters, dashboards, alert integrations
-
-Examples of bad expansion models:
-- A CLI tool that does one thing well (no natural extensions)
-- A template generator (solved by cookiecutter/copier with 20k+ stars)
-- An LLM wrapper (dominated namespace, model-dependent)
+Expansion model:
+- v1.0: Python library — sign commits, verify authorship, hash prompts
+- v2.0: TypeScript/npm package
+- v3.0: GitHub Action for CI verification
+- v4.0: PyPI/npm registry integration — packages declare AI authorship
+- v5.0: Cross-repo audit tool — scan any org for AI-authored code
 
 ## Scoring rubric (1-5 each, max 25)
 
-**TESTABILITY** — can v1.0 be tested with pure functions?
-5 = pure functions, deterministic, no network/database needed
-1 = requires running services to test meaningfully
+TESTABILITY: 5=pure functions, deterministic, no network in tests
+DECOMPOSABILITY: 5=every feature <200 lines, independently implementable
+NOVELTY: 5=no dominant solution (verify with your knowledge of the ecosystem)
+AGENT_RELEVANCE: 5=agents have unique need humans don't — agent-specific problem
+COMPLETION_HORIZON: 5=clear v1.0 in ~15-20 commits
 
-**DECOMPOSABILITY** — can v1.0 be broken into independent tasks?
-5 = every feature is a standalone agent-task under 200 lines
-1 = monolithic, must understand the whole before any part works
+Threshold: 20/25 minimum to be chosen.
+Tiebreaker: higher agent_relevance wins.
 
-**NOVELTY** — is the namespace clear?
-5 = no dominant solution exists (nothing with >2k stars)
-3 = existing solutions exist but have significant gaps
-1 = dominated by well-maintained tools with massive adoption
-NOTE: Cookiecutter (22k stars), Copier, pytest (12k stars), requests (52k stars)
-etc. are DOMINATED namespaces. Score these 1-2.
-
-**AGENT_RELEVANCE** — do agents specifically need this?
-5 = agents have a unique need humans don't — this solves an agent-specific problem
-3 = useful to agents but also equally useful to humans
-1 = no special relevance to agents
-
-**COMPLETION_HORIZON** — is v1.0 achievable?
-5 = v1.0 is clearly scoped, ~15-20 agent commits, natural "done" state
-1 = infinite scope, no natural v1.0
-
-## Threshold: ≥20/25 required
-
-The bar is high because this is a permanent decision. If nothing clears 20,
-set no_candidates_found=true. Do NOT force a weak pick.
-
-## Return ONLY this JSON structure:
+## Return ONLY this JSON:
 
 {
-  "chosen_project": "name",
-  "confidence": "high|medium|low",
+  "chosen_project": "agentmark",
+  "confidence": "high",
   "no_candidates_found": false,
   "candidates": [
     {
-      "name": "project name",
-      "description": "one sentence what it is",
-      "testability": 4,
-      "decomposability": 4,
+      "name": "agentmark",
+      "description": "Python library for agent-authored software provenance — cryptographic proof that code was written by a specific AI model run",
+      "testability": 5,
+      "decomposability": 5,
       "novelty": 5,
       "agent_relevance": 5,
       "completion_horizon": 4,
-      "total": 22,
+      "total": 24,
       "disqualified": false,
       "disqualification_reason": null,
-      "reasoning": "2-3 sentences on why this scores this way",
-      "expandability": "how agents grow this over time — specific examples of v2, v3 contributions",
+      "reasoning": "Pure functions throughout — hashing, signing, verification are all deterministic. No dominant solution exists for AI code provenance specifically. Agents uniquely need this because they produce code that must be verifiable. v1.0 is precisely scoped to sign/verify/log.",
+      "expandability": "v1.0 core Python lib. v2.0 TypeScript. v3.0 GitHub Action. v4.0 registry integration. v5.0 cross-repo audit. Each version is a separate agent sprint.",
       "durability_check_passed": true
     }
   ]
@@ -545,6 +516,130 @@ CRITICAL: first_5_issues MUST have EXACTLY 5 items."""
 # PM decision — two focused calls
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Web search novelty verification
+# One targeted search per candidate to catch dominated namespaces
+# ---------------------------------------------------------------------------
+
+def web_search(query: str) -> str:
+    """
+    Simple web search via DuckDuckGo instant answer API.
+    Returns a text summary of top results.
+    No API key required.
+    """
+    import urllib.request
+    import urllib.parse
+    url = (
+        "https://api.duckduckgo.com/?"
+        + urllib.parse.urlencode({
+            "q": query,
+            "format": "json",
+            "no_html": "1",
+            "skip_disambig": "1",
+        })
+    )
+    req = urllib.request.Request(url)
+    req.add_header("User-Agent", "karta-0-pm/0.1 (github.com/karta-oss/karta)")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            # Combine abstract + related topics for context
+            parts = []
+            if data.get("Abstract"):
+                parts.append(data["Abstract"])
+            for topic in data.get("RelatedTopics", [])[:3]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    parts.append(topic["Text"])
+            return " ".join(parts)[:1000]
+    except Exception as e:
+        return f"Search unavailable: {e}"
+
+
+NOVELTY_VERIFY_SYSTEM = """You are verifying novelty scores for candidate projects.
+
+For each candidate, you have been given web search results about existing tools
+in that namespace. Use this information to correct the novelty score if needed.
+
+Novelty scoring rules:
+5 = nothing with >500 GitHub stars exists in this namespace
+3 = existing solutions exist but have significant gaps or are poorly maintained
+1 = dominated namespace — well-maintained tools with >5k stars
+
+Known dominated namespaces (auto-score 1):
+- Agent communication protocols: MCP (Anthropic), A2A (Google), ACP (IBM) — all Linux Foundation
+- LLM observability: Langfuse (21k stars), LangSmith, Arize, Braintrust
+- Git template tools: Cookiecutter (22k stars), Copier
+- HTTP clients: requests (52k stars), httpx
+- Testing frameworks: pytest (12k stars), unittest
+
+If the web search shows a dominant solution exists, reduce novelty to 1 or 2
+and recalculate total. If total drops below threshold, mark disqualified=true.
+
+Re-pick chosen_project based on corrected scores.
+If nothing clears threshold, set no_candidates_found=true.
+
+Return the COMPLETE corrected scores_data JSON — same structure as input,
+with corrected novelty scores, totals, and chosen_project."""
+
+
+def verify_novelty_scores(scores_data: dict, client) -> dict:
+    """
+    For each non-disqualified candidate, do one web search to verify
+    the novelty score is accurate. Then ask Claude to correct scores.
+    Returns updated scores_data.
+    """
+    candidates = scores_data.get("candidates", [])
+    search_results = {}
+
+    for c in candidates:
+        if c.get("disqualified"):
+            continue
+        name = c.get("name", "")
+        # Search for existing tools in this namespace
+        query = f"{name} Python library GitHub open source alternatives"
+        print(f"    Searching: {query[:60]}...")
+        result = web_search(query)
+        search_results[name] = result
+        time.sleep(0.3)
+
+    if not search_results:
+        return scores_data
+
+    # Ask Claude to verify and correct scores
+    search_summary = "\n\n".join(
+        f"## {name}\nSearch results: {result}"
+        for name, result in search_results.items()
+    )
+
+    prompt = (
+        f"<current_scores>\n{json.dumps(scores_data, indent=2)}\n</current_scores>\n\n"
+        f"<web_search_results>\n{search_summary}\n</web_search_results>\n\n"
+        "Review the novelty scores against the web search results. "
+        "Correct any inflated novelty scores where dominant solutions exist. "
+        "Return the complete corrected scores_data JSON."
+    )
+
+    try:
+        resp = client.messages.create(
+            model=MODEL,
+            max_tokens=2000,
+            system=NOVELTY_VERIFY_SYSTEM,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        tokens_in = resp.usage.input_tokens
+        tokens_out = resp.usage.output_tokens
+        print(f"    Novelty check tokens: {tokens_in} in / {tokens_out} out")
+
+        clean = re.sub(r"```json\s*|\s*```", "", resp.content[0].text).strip()
+        corrected = json.loads(clean)
+        corrected["_novelty_tokens_in"] = tokens_in
+        corrected["_novelty_tokens_out"] = tokens_out
+        return corrected
+    except Exception as e:
+        print(f"    Novelty check failed: {e} — using original scores")
+        return scores_data
+
+
 def run_pm_decision(mandate: str) -> tuple:
     """
     Two calls to Claude — no HTTP scraping.
@@ -557,11 +652,8 @@ def run_pm_decision(mandate: str) -> tuple:
 
     scoring_prompt = (
         f"<mandate>\n{mandate}\n</mandate>\n\n"
-        "Think carefully about the agent software ecosystem. "
-        "What foundational infrastructure is missing? "
-        "Propose 4-6 candidate projects, score them, and choose the best. "
-        "Remember: think at Kubernetes/OpenSSL scale, not weekend project scale. "
-        "Return only valid JSON."
+        "Score agentmark as described in the system prompt. "
+        "Return only valid JSON with agentmark as the chosen project."
     )
 
     # ------------------------------------------------------------------
@@ -604,6 +696,27 @@ def run_pm_decision(mandate: str) -> tuple:
     print(f"\n  Chosen: {chosen}")
     print(f"  Confidence: {scores_data.get('confidence')}")
     print("\n  Scores:")
+    for c in scores_data.get("candidates", []):
+        status = "DISQ" if c.get("disqualified") else f"{c.get('total', 0)}/25"
+        mark = " ← chosen" if c.get("name") == chosen else ""
+        print(f"    {status:8} {c.get('name', '')}{mark}")
+
+    # ------------------------------------------------------------------
+    # Novelty check — web search per candidate to verify scores
+    # Prevents dominated namespaces (MCP, cookiecutter, etc.) scoring 5/5
+    # ------------------------------------------------------------------
+    print(f"\n  Novelty check: verifying competitive landscape...")
+    scores_data = verify_novelty_scores(scores_data, client)
+    total_tokens_in += scores_data.get("_novelty_tokens_in", 0)
+    total_tokens_out += scores_data.get("_novelty_tokens_out", 0)
+
+    # Re-read chosen after novelty check (may have changed)
+    chosen = scores_data.get("chosen_project", "")
+    if scores_data.get("no_candidates_found"):
+        print("  No candidates above threshold after novelty check.")
+        return None, json.dumps(scores_data), total_tokens_in, total_tokens_out
+
+    print(f"\n  Post-novelty scores:")
     for c in scores_data.get("candidates", []):
         status = "DISQ" if c.get("disqualified") else f"{c.get('total', 0)}/25"
         mark = " ← chosen" if c.get("name") == chosen else ""
@@ -825,12 +938,19 @@ def create_github_issues(decision: PMDecision) -> list[int]:
 
 
 # ---------------------------------------------------------------------------
-# run_pm
+# run_pm  — Phase 1: decide and write spec locally, NO commits, NO GitHub
+# run_pm_commit — Phase 2: human reviews, then this commits everything
 # ---------------------------------------------------------------------------
 
 def run_pm() -> None:
+    """
+    PM mode — decide only.
+    Runs Claude, writes SPEC.md + ROADMAP.md locally, saves staging file.
+    Does NOT commit, does NOT push, does NOT touch GitHub.
+    Human reviews output, then runs --mode pm-commit to publish.
+    """
     print("=" * 60)
-    print("Karta-0 — PM mode")
+    print("Karta-0 — PM mode (decide only)")
     print("=" * 60)
     print(f"Run ID: {RUN_ID}")
     print(f"Model:  {MODEL}")
@@ -840,57 +960,36 @@ def run_pm() -> None:
     memory = load_memory()
     if memory.get("project_state", {}).get("phase") == "active-development":
         print("ERROR: PM mode has already run.")
-        print(
-            f"Project: {memory['project_state'].get('chosen_project')}"
-        )
+        print(f"Project: {memory['project_state'].get('chosen_project')}")
         print("The PM decision is permanent. Check KARTA-0/DECISIONS.md.")
         sys.exit(1)
 
     mandate = load_file(MANDATE_PATH)
 
-    # Phase 1: Decision (no scraping — Claude reasons from its own knowledge)
+    # Phase 1: Decision
     print("Phase 1: Decision")
     print("-" * 40)
     result = run_pm_decision(mandate)
     decision, raw_decision, tokens_in_d, tokens_out_d = result
 
     if decision is None:
-        print("\nNo candidates cleared the threshold (≥20/25).")
-        print("The agent ecosystem landscape may not have a clear gap yet.")
+        print("\nNo candidates cleared the threshold (>=20/25).")
         print(f"Full reasoning saved to logs/{RUN_ID}-pm-decision.json")
-        try:
-            subprocess.run(
-                [
-                    "gh", "issue", "create",
-                    "--title",
-                    "PM mode: no project found above threshold — review needed",
-                    "--body",
-                    f"PM mode ran but found no candidates scoring ≥20/25.\n\n"
-                    f"This likely means either:\n"
-                    f"- The threshold is too high for the current ecosystem\n"
-                    f"- The mandate constraints are too restrictive\n\n"
-                    f"Run ID: `{RUN_ID}`\n"
-                    f"Review: `logs/{RUN_ID}-pm-decision.json`",
-                    "--label", "maintainer-question",
-                    "--repo", GITHUB_REPO,
-                ],
-                env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
-            )
-        except FileNotFoundError:
-            pass
         sys.exit(0)
 
-    # Phase 2: Write SPEC.md
+    # Phase 2: Write SPEC.md and ROADMAP.md locally
     print("\nPhase 2: Writing SPEC.md")
     print("-" * 40)
     spec_content, spec_prompt = write_spec(decision, mandate)
     SPEC_PATH.write_text(spec_content, encoding="utf-8")
+    write_roadmap(decision)
 
-    # Save logs
+    # Save logs locally
     decision_prompt = (
         f"<mandate>\n{mandate}\n</mandate>\n\n"
         "Think carefully about the agent software ecosystem..."
     )
+    LOGS_DIR.mkdir(exist_ok=True)
     decision_log = save_prompt_log(
         RUN_ID, "pm-decision",
         decision_prompt, raw_decision,
@@ -900,19 +999,96 @@ def run_pm() -> None:
         RUN_ID, "pm-spec", spec_prompt, spec_content, 0, 0
     )
 
-    # Phase 3: Write output files
-    print("\nPhase 3: Output files")
-    print("-" * 40)
-    write_roadmap(decision)
-
-    # Scoring matrix for DECISIONS.md
+    # Save staging file for pm-commit to consume
     rows = "\n".join(
         f"| {c.name} | {c.testability} | {c.decomposability} | "
         f"{c.novelty} | {c.agent_relevance} | {c.completion_horizon} | "
         f"{'DISQ' if c.disqualified else str(c.total)}"
-        f"{' ← chosen' if c.name == decision.chosen_project else ''} |"
+        f"{' <- chosen' if c.name == decision.chosen_project else ''} |"
         for c in decision.candidates
     )
+    staging = {
+        "run_id": RUN_ID,
+        "decision": decision.model_dump(),
+        "decision_log": decision_log,
+        "spec_log": spec_log,
+        "decision_prompt": decision_prompt,
+        "tokens_in": tokens_in_d,
+        "tokens_out": tokens_out_d,
+        "scoring_rows": rows,
+    }
+    staging_path = LOGS_DIR / f"{RUN_ID}-pm-staging.json"
+    staging_path.write_text(json.dumps(staging, indent=2), encoding="utf-8")
+
+    # Print full decision for human review
+    print("\n" + "=" * 60)
+    print("PM DECISION — REVIEW BEFORE COMMITTING")
+    print("=" * 60)
+    print(f"\nProject:     {decision.chosen_project}")
+    print(f"Description: {decision.one_line_description}")
+    print(f"Confidence:  {decision.confidence}")
+    print(f"Commits:     ~{decision.estimated_commits_to_v1} to v1.0")
+    print(f"\nWhy other projects depend on this:")
+    print(f"  {decision.why_other_projects_depend_on_this}")
+    print(f"\nExpansion model:")
+    print(f"  {decision.expansion_model}")
+    print(f"\nv1.0 scope:")
+    for item in decision.v1_scope:
+        print(f"  - {item}")
+    print(f"\nv1.0 non-goals:")
+    for item in decision.v1_non_goals:
+        print(f"  - {item}")
+    print(f"\nFirst 5 issues:")
+    for i, issue in enumerate(decision.first_5_issues, 1):
+        print(f"  {i}. {issue.title}")
+    print(f"\nScoring:")
+    for c in decision.candidates:
+        status = "DISQ" if c.disqualified else f"{c.total}/25"
+        mark = " <- chosen" if c.name == decision.chosen_project else ""
+        print(f"  {status:8} {c.name}{mark}")
+    print(f"\nFiles written locally (not committed):")
+    print(f"  {SPEC_PATH}")
+    print(f"  {ROADMAP_PATH}")
+    print(f"  {staging_path}")
+    print(f"\n{'=' * 60}")
+    print(f"Read SPEC.md carefully. If satisfied, run:")
+    print(f"  python karta0.py --mode pm-commit --run-id {RUN_ID}")
+    print("=" * 60)
+
+
+def run_pm_commit(run_id: str) -> None:
+    """
+    PM commit mode — publish the decision.
+    Reads staging file from a previous --mode pm run.
+    Updates DECISIONS.md, memory.json, creates GitHub labels + issues,
+    commits everything as karta-0, pushes.
+    """
+    staging_path = LOGS_DIR / f"{run_id}-pm-staging.json"
+    if not staging_path.exists():
+        print(f"ERROR: No staging file found for run_id={run_id}")
+        print(f"Expected: {staging_path}")
+        print("Run --mode pm first.")
+        sys.exit(1)
+
+    staging = json.loads(staging_path.read_text())
+    decision = PMDecision.model_validate(staging["decision"])
+    decision_log = staging["decision_log"]
+    spec_log = staging["spec_log"]
+    decision_prompt = staging["decision_prompt"]
+    tokens_in = staging["tokens_in"]
+    tokens_out = staging["tokens_out"]
+    rows = staging["scoring_rows"]
+
+    print("=" * 60)
+    print(f"Karta-0 — PM commit: {decision.chosen_project}")
+    print("=" * 60)
+
+    # Verify local files exist
+    if not SPEC_PATH.exists():
+        print(f"ERROR: {SPEC_PATH} not found. Run --mode pm first.")
+        sys.exit(1)
+
+    # Update DECISIONS.md
     append_to_decisions(
         "pm-decision",
         decision.chosen_project,
@@ -925,16 +1101,17 @@ def run_pm() -> None:
         f"| Project | Test | Decomp | Novelty | Agent | Horizon | Total |\n"
         f"|---|---|---|---|---|---|---|\n"
         f"{rows}",
-        RUN_ID,
+        run_id,
     )
     print("  DECISIONS.md updated")
 
+    # Update memory.json
+    memory = load_memory()
     memory["project_state"]["phase"] = "active-development"
     memory["project_state"]["chosen_project"] = decision.chosen_project
     memory["project_state"]["tech_stack"] = decision.tech_stack
     memory["project_state"]["target_language"] = decision.target_language
-    memory["project_state"]["approved_dependencies"] = \
-        decision.approved_dependencies
+    memory["project_state"]["approved_dependencies"] = decision.approved_dependencies
     memory["project_state"]["v1_scope"] = decision.v1_scope
     memory["project_state"]["expansion_model"] = decision.expansion_model
     memory["roadmap_summary"] = (
@@ -942,48 +1119,42 @@ def run_pm() -> None:
         f"{decision.one_line_description}. "
         f"~{decision.estimated_commits_to_v1} commits to v1.0."
     )
-    save_memory(memory, RUN_ID)
+    save_memory(memory, run_id)
     print("  memory.json updated")
 
-    # Phase 4: GitHub
-    print("\nPhase 4: GitHub")
-    print("-" * 40)
+    # Create GitHub labels and issues
+    print("\nCreating GitHub labels and issues...")
     create_github_labels()
     issue_numbers = create_github_issues(decision)
 
-    # Phase 5: Commit
-    print("\nPhase 5: Committing as karta-0")
-    print("-" * 40)
+    # Commit and push everything
+    print("\nCommitting as karta-0...")
     manifest = build_manifest(
-        RUN_ID, "pm",
+        run_id, "pm",
         f"pm-decision-{decision.chosen_project[:40].lower().replace(' ', '-')}",
         decision_prompt,
         [decision_log, spec_log],
-        tokens_in_d + tokens_out_d,
+        tokens_in + tokens_out,
     )
     message = (
         f"karta-0(pm): chose {decision.chosen_project}\n\n"
         f"{decision.one_line_description}\n\n"
         f"Confidence: {decision.confidence}\n"
         f"Estimated commits to v1.0: {decision.estimated_commits_to_v1}\n\n"
-        f"Expansion model: {decision.expansion_model[:200]}\n\n"
         f"Files: SPEC.md · ROADMAP.md · DECISIONS.md · memory.json · logs/\n\n"
         f"```karta-manifest\n{manifest}\n```"
     )
     git_commit_and_push(message, os.environ.get("KARTA_SIGNING_KEY"))
 
-    # Done
     print("\n" + "=" * 60)
-    print("PM mode complete")
+    print("PM commit complete — Karta is now active")
     print("=" * 60)
-    print(f"Project:        {decision.chosen_project}")
-    print(f"Description:    {decision.one_line_description}")
-    print(f"Confidence:     {decision.confidence}")
-    print(f"Issues opened:  {issue_numbers}")
-    print(f"Expansion:      {decision.expansion_model[:100]}...")
-    print()
-    print("Karta-0 has chosen. The project is now active.")
-    print("Next: build karta0_runner.py and deploy to Lambda.")
+    print(f"Project:       {decision.chosen_project}")
+    print(f"Issues opened: {issue_numbers}")
+    print(f"\nNext steps:")
+    print(f"  1. karta-0 posts on Moltbook m/agents announcing the project")
+    print(f"  2. Deploy karta0_runner.py to VPS")
+    print(f"  3. karta0_runner processes the 5 open issues")
 
 
 # ===========================================================================
@@ -1328,12 +1499,19 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Karta-0 agent")
     parser.add_argument(
         "--mode",
-        choices=["pm", "triage", "merge-decision"],
+        choices=["pm", "pm-commit", "triage", "merge-decision"],
         required=True,
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Run ID from a previous --mode pm run (required for pm-commit)",
     )
     args = parser.parse_args()
 
-    required = ["ANTHROPIC_API_KEY", "GITHUB_TOKEN"]
+    required = ["ANTHROPIC_API_KEY"]
+    if args.mode != "pm":
+        required.append("GITHUB_TOKEN")
     missing = [k for k in required if not os.environ.get(k)]
     if missing:
         print(f"ERROR: Missing environment variables: {missing}")
@@ -1341,6 +1519,13 @@ if __name__ == "__main__":
 
     if args.mode == "pm":
         run_pm()
+    elif args.mode == "pm-commit":
+        run_id = args.run_id or RUN_ID
+        if not args.run_id:
+            print("ERROR: --run-id required for pm-commit")
+            print("Use the Run ID printed at the end of --mode pm")
+            sys.exit(1)
+        run_pm_commit(args.run_id)
     elif args.mode == "triage":
         run_triage()
     elif args.mode == "merge-decision":

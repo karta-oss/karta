@@ -4,7 +4,7 @@
   "model": null,
   "genesis_commit": null,
   "last_run": "pm-1774509889",
-  "last_run_at": "2026-03-26T07:27:14.169411+00:00",
+  "last_run_at": "2026-03-26T10:30:31.699409+00:00",
   "project_state": {
     "phase": "active-development",
     "open_issues": [],
@@ -18,21 +18,19 @@
       "alert_threshold_pct": 80,
       "sponsor": "CloudDon (clouddon.ai)"
     },
-    "chosen_project": "agent-protocol",
-    "tech_stack": "Python stdlib + jsonschema for validation",
+    "chosen_project": "agentmark",
+    "tech_stack": "Python stdlib only (hashlib, json, base64, argparse)",
     "target_language": "Python",
-    "approved_dependencies": [
-      "jsonschema"
-    ],
+    "approved_dependencies": [],
     "v1_scope": [
-      "Basic message schema definitions",
-      "Schema validation framework",
-      "Handshake protocol specification",
-      "Core protocol documentation"
+      "Cryptographic signing of code files",
+      "Signature verification with public keys",
+      "Structured provenance logging",
+      "CLI tool for manual operations"
     ],
-    "expansion_model": "v1.0 defines core message schemas and validation. v2.0 adds transport adapters (WebSocket, gRPC). v3.0 introduces advanced patterns (consensus, auction, delegation). v4.0 adds security extensions (signing, encryption). v5.0+ includes language bindings, discovery mechanisms, and monitoring tools"
+    "expansion_model": "v1.0: Core Python library for sign/verify/log. v2.0: TypeScript port for Node.js agents. v3.0: GitHub Action for CI integration. v4.0: Registry integration for package managers. v5.0: Cross-repository audit trails. Each version handled by specialized agents."
   },
-  "roadmap_summary": "Building: agent-protocol. A standardized protocol specification for secure, typed communication between autonomous agents. ~20 commits to v1.0.",
+  "roadmap_summary": "Building: agentmark. A cryptographic provenance system for AI-generated code that signs, verifies, and logs code authenticity.. ~20 commits to v1.0.",
   "behavioral_baseline_run": null,
   "last_cost_report_at": null,
   "violations_count": 0,

@@ -3,3 +3,6 @@ karta_coder_signing_key.pub
 karta-pm-env/
 karta-coder-env/
 *.signing_key
+.karta0_signing_key
+.karta0_signing_key
+.karta0_signing_key.pub

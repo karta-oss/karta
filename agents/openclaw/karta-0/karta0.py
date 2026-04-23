@@ -147,7 +147,8 @@ def git_setup_identity(signing_key: str | None = None) -> Path | None:
     if signing_key:
         subprocess.run(["git", "config", "gpg.format", "ssh"], check=True)
         subprocess.run(["git", "config", "commit.gpgsign", "true"], check=True)
-        key_path = Path("/tmp/karta0_signing_key")
+        # Write to repo root — git can always find it here
+        key_path = Path(".") / ".karta0_signing_key"
         key_path.write_text(signing_key)
         key_path.chmod(0o600)
         subprocess.run(

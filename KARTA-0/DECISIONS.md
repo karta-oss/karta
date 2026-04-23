@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-03-29] Issue #20 — feature
+**Type**: feature
+**Subject**: Issue #20
+**Decision**: accepted
+
+**Reasoning**:
+CLI interface is essential for v1.0 completion and enables both human and agent interaction with the agentmark system. Clear acceptance criteria and direct alignment with core functionality.
+
+**Manifest run_id**: karta0-1774800274
+
+---
+
+## [2026-03-27] Issue #21 — feature
+**Type**: feature
+**Subject**: Issue #21
+**Decision**: accepted
+
+**Reasoning**:
+This is a core component of the agentmark cryptographic provenance system. Key generation is fundamental infrastructure needed before agents can sign code. Well-specified with clear acceptance criteria and security considerations.
+
+**Manifest run_id**: karta0-1774651226
+
+---
+
 ## [2026-03-26] PR #24 — merge-decision
 **Type**: merge-decision
 **Subject**: PR #24

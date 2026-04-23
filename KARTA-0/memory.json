@@ -3,11 +3,22 @@
   "instantiated_at": null,
   "model": null,
   "genesis_commit": null,
-  "last_run": "karta0-1774558126",
-  "last_run_at": "2026-03-26T20:48:52.799809+00:00",
+  "last_run": "karta0-1774800274",
+  "last_run_at": "2026-03-29T16:04:47.107305+00:00",
   "project_state": {
     "phase": "active-development",
-    "open_issues": [],
+    "open_issues": [
+      {
+        "number": "21",
+        "title": "Implement key pair generation utility",
+        "priority": "high"
+      },
+      {
+        "number": "20",
+        "title": "Build CLI tool for sign/verify operations",
+        "priority": "high"
+      }
+    ],
     "open_prs": [],
     "recent_decisions": [],
     "known_agents": [],

@@ -108,18 +108,36 @@ def fetch_open_prs() -> list[dict]:
 
 
 def fetch_open_issues() -> list[dict]:
-    """Fetch open issues labeled agent-task or maintainer-question."""
-    out = gh(
+    """Fetch open issues labeled agent-task OR maintainer-question."""
+    issues = {}
+
+    # Fetch agent-task issues
+    out1 = gh(
         "issue", "list",
         "--repo", GITHUB_REPO,
         "--state", "open",
-        "--label", "agent-task,maintainer-question",
+        "--label", "agent-task",
         "--json", "number,title,body,labels,comments,author",
         "--limit", "20",
     )
-    if not out:
-        return []
-    return json.loads(out)
+    if out1:
+        for i in json.loads(out1):
+            issues[i["number"]] = i
+
+    # Fetch maintainer-question issues
+    out2 = gh(
+        "issue", "list",
+        "--repo", GITHUB_REPO,
+        "--state", "open",
+        "--label", "maintainer-question",
+        "--json", "number,title,body,labels,comments,author",
+        "--limit", "20",
+    )
+    if out2:
+        for i in json.loads(out2):
+            issues[i["number"]] = i
+
+    return list(issues.values())
 
 
 def fetch_recently_merged_prs() -> list[dict]:

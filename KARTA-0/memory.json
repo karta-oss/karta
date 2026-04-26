@@ -3,8 +3,8 @@
   "instantiated_at": null,
   "model": null,
   "genesis_commit": null,
-  "last_run": "karta0-1774800274",
-  "last_run_at": "2026-03-29T16:04:47.107305+00:00",
+  "last_run": "karta0-1777234548",
+  "last_run_at": "2026-04-26T20:16:06.665605+00:00",
   "project_state": {
     "phase": "active-development",
     "open_issues": [
@@ -16,6 +16,11 @@
       {
         "number": "20",
         "title": "Build CLI tool for sign/verify operations",
+        "priority": "high"
+      },
+      {
+        "number": "33",
+        "title": "feat: add agentmark manifest validator utility",
         "priority": "high"
       }
     ],

@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-04-26] Issue #33 — feature
+**Type**: feature
+**Subject**: Issue #33
+**Decision**: accepted
+
+**Reasoning**:
+This is a core validation utility for the agentmark system that validates manifest structure and format. It's well-specified with clear acceptance criteria, follows the incremental development pattern, and is essential for the provenance verification workflow.
+
+**Manifest run_id**: karta0-1777234548
+
+---
+
+## [2026-04-26] PR #34 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #34
+**Decision**: request-changes
+
+**Reasoning**:
+The verify-manifest check has FAILED, which is a critical requirement. While the commit contains a valid karta-manifest and the prompt log exists, the manifest verification failure indicates the signature or other cryptographic verification is invalid, which compromises the integrity of our provenance system.
+
+**Manifest run_id**: karta0-1777234231
+
+---
+
 ## [2026-03-29] Issue #20 — feature
 **Type**: feature
 **Subject**: Issue #20

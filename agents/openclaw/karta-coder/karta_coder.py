@@ -15,7 +15,9 @@ Usage:
 Environment variables:
     ANTHROPIC_API_KEY     required
     GITHUB_TOKEN          required (karta-coder bot token)
-    KARTA_SIGNING_KEY     recommended
+    KARTA_SIGNING_KEY       recommended (git commit signing)
+    AGENTMARK_PRIVATE_KEY   recommended (agentmark manifest signing, base64 DER)
+    AGENTMARK_PIPELINE_KEY  default: karta-coder-v1
     GITHUB_REPO           default: karta-oss/karta
     ISSUE_NUMBER          optional — implement this specific issue
                           if not set, pick lowest-numbered triaged issue
@@ -26,7 +28,6 @@ import os
 import sys
 import json
 import time
-import hashlib
 import subprocess
 import re
 import tempfile
@@ -34,11 +35,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import anthropic
+import agentmark
+from agentmark.signing import sign_manifest
+from agentmark.manifest import build_manifest as agentmark_build_manifest
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.hazmat.primitives.serialization import (
+    Encoding, PublicFormat, PrivateFormat, NoEncryption, load_der_private_key
+)
 
 GITHUB_REPO = os.environ.get("GITHUB_REPO", "karta-oss/karta")
 RUN_ID = os.environ.get("RUN_ID", f"coder-{int(time.time())}")
 MODEL = "claude-sonnet-4-20250514"
 MAX_RETRIES = 2
+
+# agentmark pipeline identity
+AGENTMARK_PIPELINE_KEY = os.environ.get("AGENTMARK_PIPELINE_KEY", "karta-coder-v1")
+AGENTMARK_PRIVATE_KEY = os.environ.get("AGENTMARK_PRIVATE_KEY", "")  # DER bytes, base64-encoded
 
 GH_ENV = {**os.environ, "GH_TOKEN": os.environ.get("GITHUB_TOKEN", "")}
 
@@ -51,8 +63,10 @@ def gh(*args) -> str | None:
         result = subprocess.run(
             ["gh"] + list(args),
             capture_output=True, text=True, env=GH_ENV,
+            encoding="utf-8", errors="replace",
         )
-        return result.stdout.strip() if result.returncode == 0 else None
+        stdout = result.stdout or ""
+        return stdout.strip() if result.returncode == 0 else None
     except FileNotFoundError:
         print("ERROR: gh CLI not found. Install from https://cli.github.com")
         sys.exit(1)
@@ -81,6 +95,48 @@ def fetch_issue(number: int) -> dict | None:
         "--json", "number,title,body,labels,assignees",
     )
     return json.loads(out) if out else None
+
+
+def fetch_challenge_token(issue_number: int) -> str | None:
+    """Fetch the LATEST agentmark challenge token from issue comments."""
+    out = gh(
+        "issue", "view", str(issue_number),
+        "--repo", GITHUB_REPO,
+        "--json", "comments",
+    )
+    if not out:
+        return None
+    data = json.loads(out)
+    last_token = None
+    for comment in data.get("comments", []):
+        body = comment.get("body", "")
+        # Find all tokens in this comment — take the last one
+        tokens = re.findall(r"agentmark-[a-f0-9]{16}", body)
+        if tokens:
+            last_token = tokens[-1]
+    return last_token
+
+
+def get_or_generate_private_key() -> tuple[bytes, bytes]:
+    """
+    Get Ed25519 private key from env or generate a new one.
+    Returns (private_key_bytes, public_key_bytes).
+    """
+    import base64
+    key_b64 = AGENTMARK_PRIVATE_KEY.strip()
+    if key_b64:
+        private_key_bytes = base64.b64decode(key_b64)
+        private_key = load_der_private_key(private_key_bytes, password=None)
+    else:
+        print("  WARNING: AGENTMARK_PRIVATE_KEY not set — generating ephemeral key")
+        private_key = Ed25519PrivateKey.generate()
+        private_key_bytes = private_key.private_bytes(
+            Encoding.DER, PrivateFormat.PKCS8, NoEncryption()
+        )
+    public_key_bytes = private_key.public_key().public_bytes(
+        Encoding.DER, PublicFormat.SubjectPublicKeyInfo
+    )
+    return private_key_bytes, public_key_bytes
 
 
 def assign_issue(number: int) -> None:
@@ -190,7 +246,9 @@ def git_setup(workdir: str, signing_key: str | None = None) -> Path | None:
         key_path = Path(workdir) / ".signing_key"
         key_path.write_text(signing_key)
         key_path.chmod(0o600)
-        g("config", "user.signingkey", str(key_path))
+        # Use forward slashes — Git on Windows requires this for SSH key paths
+        key_path_str = str(key_path).replace("\\", "/")
+        g("config", "user.signingkey", key_path_str)
     return key_path
 
 
@@ -218,7 +276,10 @@ PROJECT LAYOUT:
   src/<package_name>/<module>.py   — implementation
   tests/test_<module>.py           — pytest tests
 
-RETURN FORMAT — valid JSON only, no other text:
+RETURN FORMAT — your ENTIRE response must be a single valid JSON object.
+Do NOT wrap in ```json blocks. Do NOT add any text before or after the JSON.
+Start your response with { and end with }.
+
 {
   "files": {
     "src/<package>/<module>.py": "<full file contents>",
@@ -229,6 +290,7 @@ RETURN FORMAT — valid JSON only, no other text:
   "notes": "any tradeoffs or important implementation notes"
 }
 
+CRITICAL: files must use dict format {path: content}, not a list.
 Include BOTH implementation AND test files in every response.
 Tests must be self-contained and pass with pytest."""
 
@@ -277,8 +339,9 @@ def generate_implementation(
     spec: str,
     existing_files: dict[str, str],
     package_name: str,
+    challenge_token: str | None = None,
 ) -> tuple | None:
-    client = anthropic.Anthropic()
+    """Generate implementation using agentmark.call() for provenance capture."""
 
     for attempt in range(MAX_RETRIES + 1):
         if attempt > 0:
@@ -290,34 +353,87 @@ def generate_implementation(
             spec, existing_files, package_name, attempt,
         )
 
-        print(f"  Calling {MODEL} (attempt {attempt + 1})...")
+        print(f"  Calling {MODEL} via agentmark (attempt {attempt + 1})...")
         try:
-            response = client.messages.create(
-                model=MODEL,
-                max_tokens=8000,
-                system=CODER_SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            raw = response.content[0].text
-            tokens_in = response.usage.input_tokens
-            tokens_out = response.usage.output_tokens
-            print(f"  Tokens: {tokens_in} in / {tokens_out} out")
+            if challenge_token:
+                am_result = agentmark.call(
+                    provider="anthropic",
+                    model=MODEL,
+                    prompt=prompt,
+                    challenge_token=challenge_token,
+                    max_tokens=16000,
+                    temperature=0,
+                )
+                # Strip challenge echo line before JSON parsing
+                raw = "\n".join(
+                    line for line in am_result.code.splitlines()
+                    if not line.startswith("agentmark-challenge-echo:")
+                ).strip()
+                raw_bytes = am_result.raw_bytes
+                request_id = am_result.request_id
+                output_hash = am_result.output_hash
+                challenge_echo_verified = am_result.challenge_echo_verified
+                print(f"  agentmark: output_hash={output_hash[:20]}...")
+                print(f"  agentmark: challenge_echo={challenge_echo_verified}")
+                print(f"  agentmark: request_id={request_id}")
+                # Parse token usage from raw bytes
+                try:
+                    resp_data = json.loads(raw_bytes)
+                    tokens_in = resp_data.get("usage", {}).get("input_tokens", 0)
+                    tokens_out = resp_data.get("usage", {}).get("output_tokens", 0)
+                except Exception:
+                    tokens_in = tokens_out = 0
+            else:
+                print("  WARNING: No challenge token — falling back to direct call")
+                client = anthropic.Anthropic()
+                response = client.messages.create(
+                    model=MODEL,
+                    max_tokens=8000,
+                    system=CODER_SYSTEM,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                raw = response.content[0].text
+                raw_bytes = None
+                request_id = None
+                output_hash = None
+                challenge_echo_verified = False
+                tokens_in = response.usage.input_tokens
+                tokens_out = response.usage.output_tokens
+                print(f"  Tokens: {tokens_in} in / {tokens_out} out")
 
             clean = re.sub(r"```json\s*|\s*```", "", raw).strip()
+            print(f"  DEBUG raw[:200]: {raw[:200]!r}")
+            print(f"  DEBUG clean[:200]: {clean[:200]!r}")
             result = json.loads(clean)
+
+            print(f"  DEBUG result keys: {list(result.keys())}")
+
+            # Normalize files — handle both list and dict formats
+            files_raw = result.get("files", [])
+            if isinstance(files_raw, list):
+                # Convert [{path, content}, ...] to {path: content}
+                files_dict = {f["path"]: f["content"] for f in files_raw if "path" in f}
+                result["files"] = files_dict
+            elif not isinstance(files_raw, dict):
+                result["files"] = {}
+            
+            print(f"  DEBUG file paths: {list(result['files'].keys())}")
 
             if not result.get("files"):
                 print("  No files in response — retrying")
                 continue
 
-            # Validate both implementation and test files present
             has_impl = any("src/" in p for p in result["files"])
             has_test = any("test" in p for p in result["files"])
             if not has_impl or not has_test:
                 print(f"  Missing impl ({has_impl}) or tests ({has_test}) — retrying")
                 continue
 
-            return result, prompt, raw, tokens_in, tokens_out
+            return (
+                result, prompt, raw, tokens_in, tokens_out,
+                raw_bytes, request_id, output_hash,
+                challenge_echo_verified, challenge_token,
+            )
 
         except json.JSONDecodeError as e:
             print(f"  JSON parse error: {e}")
@@ -331,25 +447,42 @@ def generate_implementation(
 # Manifest and logging
 # ---------------------------------------------------------------------------
 
-def build_manifest(
+def build_agentmark_manifest(
     run_id: str,
     issue_number: int,
-    prompt: str,
     log_path: str,
-    tokens_used: int,
+    raw_bytes: bytes | None,
+    request_id: str | None,
+    output_hash: str | None,
+    challenge_token: str | None,
+    challenge_echo_verified: bool,
+    private_key_bytes: bytes,
 ) -> str:
-    return json.dumps({
-        "agent": "karta-coder@0.1.0",
-        "model": MODEL,
-        "framework": "anthropic-sdk-python",
-        "role": "coder",
-        "task_id": f"issue-{issue_number}",
-        "prompt_hash": f"sha256:{hashlib.sha256(prompt.encode()).hexdigest()}",
-        "prompt_log": log_path,
-        "run_id": run_id,
-        "revision": 1,
-        "tokens_used": tokens_used,
-    }, indent=2)
+    """Build and sign an agentmark manifest for this commit."""
+    from agentmark.core import CallResult
+    from agentmark.manifest import build_manifest as am_build_manifest
+
+    if raw_bytes and output_hash and challenge_token:
+        # Real agentmark call — build proper manifest
+        result = CallResult(
+            raw_bytes=raw_bytes,
+            request_id=request_id,
+            code="",
+            provider="anthropic",
+            model=MODEL,
+            challenge_token=challenge_token,
+            challenge_echo_verified=challenge_echo_verified,
+        )
+        manifest = am_build_manifest(
+            result=result,
+            pipeline_key=AGENTMARK_PIPELINE_KEY,
+            prompt_log_path=log_path,
+        )
+        manifest.signature = sign_manifest(private_key_bytes, manifest)
+        return manifest.to_commit_block()
+    else:
+        # Fallback — no agentmark (no challenge token)
+        return f"```karta-manifest\n{json.dumps({'agent': 'karta-coder@0.1.0', 'model': MODEL, 'run_id': run_id, 'task_id': f'issue-{issue_number}', 'note': 'no-agentmark-challenge'}, indent=2)}\n```"
 
 
 def save_log(
@@ -418,15 +551,25 @@ def implement_issue(issue: dict) -> bool:
         print(f"  Package name: {package_name}")
 
         # Generate implementation
+        # Fetch agentmark challenge token from issue comments
+        challenge_token = fetch_challenge_token(number)
+        if challenge_token:
+            print(f"  agentmark challenge token: {challenge_token}")
+        else:
+            print("  WARNING: No agentmark challenge token found in issue comments")
+
         result = generate_implementation(
-            number, title, body, spec, existing_files, package_name
+            number, title, body, spec, existing_files, package_name,
+            challenge_token=challenge_token,
         )
 
         if not result:
             print("  ERROR: Failed to generate implementation")
             return False
 
-        impl, prompt, raw_response, tokens_in, tokens_out = result
+        (impl, prompt, raw_response, tokens_in, tokens_out,
+         raw_bytes, request_id, output_hash,
+         challenge_echo_verified, challenge_token) = result
         files = impl["files"]
         summary = impl.get("summary", f"Implement issue #{number}")
         print(f"  Generated {len(files)} files: {list(files.keys())}")
@@ -485,9 +628,20 @@ def implement_issue(issue: dict) -> bool:
             print("  ERROR: No changes to commit")
             return False
 
-        # Build manifest
-        manifest = build_manifest(
-            RUN_ID, number, prompt, log_rel, tokens_in + tokens_out
+        # Get agentmark signing key
+        private_key_bytes, _ = get_or_generate_private_key()
+
+        # Build agentmark manifest
+        manifest_block = build_agentmark_manifest(
+            run_id=RUN_ID,
+            issue_number=number,
+            log_path=log_rel,
+            raw_bytes=raw_bytes,
+            request_id=request_id,
+            output_hash=output_hash,
+            challenge_token=challenge_token,
+            challenge_echo_verified=challenge_echo_verified,
+            private_key_bytes=private_key_bytes,
         )
 
         # Commit
@@ -500,7 +654,7 @@ def implement_issue(issue: dict) -> bool:
             f"{summary}\n\n"
             f"Issue: {title}\n\n"
             f"Files:\n" + "\n".join(f"- {f}" for f in files) + "\n\n"
-            f"```karta-manifest\n{manifest}\n```"
+            f"{manifest_block}"
         )
 
         result_commit = subprocess.run(

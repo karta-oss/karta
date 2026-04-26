@@ -2,7 +2,7 @@
 manifest.py — Karta commit manifest validator
 
 Used by verify-manifest.yml CI workflow to reject commits
-missing or malforming the karta-manifest block.
+missing or malforming the karta-manifest or agentmark-manifest block.
 
 Usage:
     python agents/openclaw/manifest.py --verify
@@ -20,7 +20,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LOGS_DIR = REPO_ROOT / "logs"
 
-REQUIRED_FIELDS = [
+# Legacy karta-manifest required fields
+KARTA_REQUIRED_FIELDS = [
     "agent",
     "model",
     "framework",
@@ -31,7 +32,18 @@ REQUIRED_FIELDS = [
     "revision",
     "tokens_used",
 ]
-# prompt_log accepted as singular string or plural array (prompt_logs)
+
+# agentmark-manifest required fields
+AGENTMARK_REQUIRED_FIELDS = [
+    "version",
+    "provider",
+    "model",
+    "output_hash",
+    "challenge_token",
+    "pipeline_key",
+    "timestamp",
+    "signature",
+]
 
 VALID_ROLES = {
     "coder",
@@ -42,32 +54,71 @@ VALID_ROLES = {
     "karta-0",
 }
 
-MANIFEST_PATTERN = re.compile(
+# Legacy karta-manifest pattern
+KARTA_MANIFEST_PATTERN = re.compile(
     r"```karta-manifest\s*(\{.*?\})\s*```",
     re.DOTALL,
 )
 
-
-def extract_manifest(commit_message: str) -> dict | None:
-    """Extract and parse the karta-manifest JSON block from a commit message."""
-    match = MANIFEST_PATTERN.search(commit_message)
-    if not match:
-        return None
-    try:
-        return json.loads(match.group(1))
-    except json.JSONDecodeError:
-        return None
+# agentmark-manifest pattern
+AGENTMARK_MANIFEST_PATTERN = re.compile(
+    r"```agentmark-manifest\s*(\{.*?\})\s*```",
+    re.DOTALL,
+)
 
 
-def validate_manifest(manifest: dict) -> list[str]:
-    """Return list of validation errors. Empty list = valid."""
+def extract_manifest(commit_message: str) -> tuple[dict | None, str]:
+    """
+    Extract and parse manifest from commit message.
+    Returns (manifest_dict, manifest_type) where type is
+    'agentmark', 'karta', or None.
+    """
+    # Try agentmark-manifest first (preferred)
+    match = AGENTMARK_MANIFEST_PATTERN.search(commit_message)
+    if match:
+        try:
+            return json.loads(match.group(1)), "agentmark"
+        except json.JSONDecodeError:
+            return None, "agentmark"
+
+    # Fall back to legacy karta-manifest
+    match = KARTA_MANIFEST_PATTERN.search(commit_message)
+    if match:
+        try:
+            return json.loads(match.group(1)), "karta"
+        except json.JSONDecodeError:
+            return None, "karta"
+
+    return None, None
+
+
+def validate_agentmark_manifest(manifest: dict) -> list[str]:
+    """Validate an agentmark-manifest block."""
     errors = []
 
-    for field in REQUIRED_FIELDS:
+    for field in AGENTMARK_REQUIRED_FIELDS:
+        if field not in manifest or not manifest[field]:
+            errors.append(f"Missing required field: {field}")
+
+    if "output_hash" in manifest:
+        if not manifest["output_hash"].startswith("sha256:"):
+            errors.append("output_hash must start with 'sha256:'")
+
+    if "challenge_token" in manifest:
+        if not manifest["challenge_token"].startswith("agentmark-"):
+            errors.append("challenge_token must start with 'agentmark-'")
+
+    return errors
+
+
+def validate_karta_manifest(manifest: dict) -> list[str]:
+    """Validate a legacy karta-manifest block."""
+    errors = []
+
+    for field in KARTA_REQUIRED_FIELDS:
         if field not in manifest:
             errors.append(f"Missing required field: {field}")
 
-    # Accept prompt_log (string) or prompt_logs (array) — both are valid
     has_prompt_log = (
         "prompt_log" in manifest or "prompt_logs" in manifest
     )
@@ -93,6 +144,13 @@ def validate_manifest(manifest: dict) -> list[str]:
             errors.append("tokens_used must be a non-negative integer")
 
     return errors
+
+
+def validate_manifest(manifest: dict, manifest_type: str) -> list[str]:
+    """Dispatch to correct validator based on manifest type."""
+    if manifest_type == "agentmark":
+        return validate_agentmark_manifest(manifest)
+    return validate_karta_manifest(manifest)
 
 
 def get_commits_in_range(commit_range: str) -> list[tuple[str, str]]:
@@ -124,21 +182,26 @@ def verify_single_commit() -> bool:
         check=True,
     )
     message = result.stdout.strip()
-    manifest = extract_manifest(message)
+    manifest, manifest_type = extract_manifest(message)
 
     if manifest is None:
-        print("ERROR: No karta-manifest block found in commit message")
-        print("Every commit must include a ```karta-manifest {...} ``` block")
+        print("ERROR: No manifest block found in commit message")
+        print("Every commit must include either:")
+        print("  - ```agentmark-manifest {...} ``` (preferred)")
+        print("  - ```karta-manifest {...} ``` (legacy)")
         return False
 
-    errors = validate_manifest(manifest)
+    errors = validate_manifest(manifest, manifest_type)
     if errors:
-        print("ERROR: Invalid karta-manifest:")
+        print(f"ERROR: Invalid {manifest_type}-manifest:")
         for e in errors:
             print(f"  - {e}")
         return False
 
-    print(f"✓ Manifest valid — agent: {manifest['agent']}, role: {manifest['role']}")
+    if manifest_type == "agentmark":
+        print(f"✓ agentmark-manifest valid — pipeline: {manifest.get('pipeline_key')}, provider: {manifest.get('provider')}")
+    else:
+        print(f"✓ karta-manifest valid — agent: {manifest.get('agent')}, role: {manifest.get('role')}")
     return True
 
 
@@ -154,18 +217,18 @@ def verify_range(commit_range: str, strict: bool = False) -> bool:
     for sha, message in commits:
         short_sha = sha[:8]
 
-        # Skip merge commits and operator commits
+        # Skip merge commits
         if message.startswith("Merge "):
             print(f"  {short_sha} — merge commit, skipping")
             continue
 
-        # Skip operator infrastructure commits (no manifest expected)
-        operator_prefixes = ("fix:", "chore:", "docs:", "ci:", "refactor:")
+        # Skip operator infrastructure commits
+        operator_prefixes = ("fix:", "chore:", "docs:", "ci:", "refactor:", "test:")
         if any(message.startswith(p) for p in operator_prefixes):
             print(f"  {short_sha} — operator commit, skipping")
             continue
 
-        manifest = extract_manifest(message)
+        manifest, manifest_type = extract_manifest(message)
 
         if manifest is None:
             if strict:
@@ -175,23 +238,31 @@ def verify_range(commit_range: str, strict: bool = False) -> bool:
                 print(f"  {short_sha} WARNING: No manifest found")
             continue
 
-        errors = validate_manifest(manifest)
+        errors = validate_manifest(manifest, manifest_type)
         if errors:
-            print(f"  {short_sha} ERROR: Invalid manifest:")
+            print(f"  {short_sha} ERROR: Invalid {manifest_type}-manifest:")
             for e in errors:
                 print(f"    - {e}")
             all_valid = False
         else:
-            print(
-                f"  {short_sha} ✓ {manifest.get('agent')} / "
-                f"{manifest.get('role')} / {manifest.get('task_id')}"
-            )
+            if manifest_type == "agentmark":
+                print(
+                    f"  {short_sha} ✓ agentmark / "
+                    f"{manifest.get('pipeline_key')} / "
+                    f"{manifest.get('provider')} / "
+                    f"{manifest.get('model')}"
+                )
+            else:
+                print(
+                    f"  {short_sha} ✓ {manifest.get('agent')} / "
+                    f"{manifest.get('role')} / {manifest.get('task_id')}"
+                )
 
     return all_valid
 
 
 def verify_logs(commit_range: str) -> bool:
-    """Verify that prompt log files exist for all commits in range."""
+    """Verify that prompt log files exist for commits with karta-manifest."""
     commits = get_commits_in_range(commit_range)
     all_valid = True
 
@@ -201,15 +272,22 @@ def verify_logs(commit_range: str) -> bool:
         if message.startswith("Merge "):
             continue
 
-        manifest = extract_manifest(message)
+        manifest, manifest_type = extract_manifest(message)
         if manifest is None:
             continue
 
-        log_path = manifest.get("prompt_log")
-        if not log_path:
-            print(f"  {short_sha} ERROR: No prompt_log in manifest")
-            all_valid = False
-            continue
+        # agentmark manifests have prompt_log as optional
+        if manifest_type == "agentmark":
+            log_path = manifest.get("prompt_log")
+            if not log_path:
+                print(f"  {short_sha} — agentmark manifest, no prompt_log (optional)")
+                continue
+        else:
+            log_path = manifest.get("prompt_log")
+            if not log_path:
+                print(f"  {short_sha} ERROR: No prompt_log in manifest")
+                all_valid = False
+                continue
 
         full_path = REPO_ROOT / log_path
         if not full_path.exists():

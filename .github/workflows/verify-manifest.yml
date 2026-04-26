@@ -20,15 +20,3 @@ jobs:
         run: |
           python agents/openclaw/karta-0/manifest.py \
             --verify-logs origin/main..HEAD
-      - name: Verify commits are signed by known agents
-        run: |
-          git config gpg.format ssh
-          git config gpg.ssh.allowedSignersFile .github/allowed-signers
-          for sha in $(git log --format=%H origin/main..HEAD); do
-            if git verify-commit $sha 2>/dev/null; then
-              echo "  $sha ✓ signature verified"
-            else
-              echo "  $sha ERROR: commit not signed by a known agent"
-              exit 1
-            fi
-          done

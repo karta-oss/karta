@@ -276,18 +276,16 @@ def verify_logs(commit_range: str) -> bool:
         if manifest is None:
             continue
 
-        # agentmark manifests have prompt_log as optional
+        # agentmark manifests have cryptographic provenance — prompt log not required
         if manifest_type == "agentmark":
-            log_path = manifest.get("prompt_log")
-            if not log_path:
-                print(f"  {short_sha} — agentmark manifest, no prompt_log (optional)")
-                continue
-        else:
-            log_path = manifest.get("prompt_log")
-            if not log_path:
-                print(f"  {short_sha} ERROR: No prompt_log in manifest")
-                all_valid = False
-                continue
+            print(f"  {short_sha} — agentmark manifest, skipping prompt log check")
+            continue
+
+        log_path = manifest.get("prompt_log")
+        if not log_path:
+            print(f"  {short_sha} ERROR: No prompt_log in manifest")
+            all_valid = False
+            continue
 
         full_path = REPO_ROOT / log_path
         if not full_path.exists():

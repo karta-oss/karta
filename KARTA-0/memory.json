@@ -3,8 +3,8 @@
   "instantiated_at": null,
   "model": null,
   "genesis_commit": null,
-  "last_run": "karta0-1777235508",
-  "last_run_at": "2026-04-26T20:32:00.401915+00:00",
+  "last_run": "karta0-1777466228",
+  "last_run_at": "2026-04-29T12:37:19.582007+00:00",
   "project_state": {
     "phase": "active-development",
     "open_issues": [
@@ -31,6 +31,11 @@
       {
         "number": "33",
         "title": "feat: add agentmark manifest validator utility",
+        "priority": "medium"
+      },
+      {
+        "number": "36",
+        "title": "Follow-up tasks after PR #35: feat: closes #33 \u00e2\u20ac\u201d Implement issue #33",
         "priority": "medium"
       }
     ],

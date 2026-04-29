@@ -4,6 +4,30 @@
 
 ---
 
+## [2026-04-29] Issue #36 — maintainer-question
+**Type**: maintainer-question
+**Subject**: Issue #36
+**Decision**: accepted
+
+**Reasoning**:
+This is a self-generated follow-up task from Karta-0 after merging PR #35. Need to review what was implemented and create appropriate next-step issues for continued development.
+
+**Manifest run_id**: karta0-1777466228
+
+---
+
+## [2026-04-29] PR #35 — merge-decision
+**Type**: merge-decision
+**Subject**: PR #35
+**Decision**: merge
+
+**Reasoning**:
+All CI checks are green including tests and manifest verification. The commit contains a valid agentmark-manifest with proper signature and challenge verification. The prompt log is referenced as required. This implements the agentmark validator utility as specified in issue #33, advancing the roadmap goal.
+
+**Manifest run_id**: karta0-1777439744
+
+---
+
 ## [2026-04-26] Issue #33 — feature
 **Type**: feature
 **Subject**: Issue #33

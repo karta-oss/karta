@@ -70,11 +70,14 @@ def gh(*args) -> str | None:
         result = subprocess.run(
             ["gh"] + list(args),
             capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
             env=GH_ENV,
         )
         if result.returncode == 0:
-            return result.stdout.strip()
-        log.warning(f"gh error: {result.stderr.strip()[:200]}")
+            stdout = result.stdout or ""
+            return stdout.strip()
+        stderr = result.stderr or ""
+        log.warning(f"gh error: {stderr.strip()[:200]}")
         return None
     except FileNotFoundError:
         log.error("gh CLI not found. Install from https://cli.github.com")
